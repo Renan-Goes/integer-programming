@@ -7,7 +7,6 @@ class ILP_Solver():
     def __init__(self):
         self.solver = pywraplp.Solver.CreateSolver('SCIP')
 
-
     def read_data(self, filename):
         with open(filename, 'r', encoding='utf-8') as input_f:
             input_lines = input_f.readlines()
@@ -70,36 +69,59 @@ class ILP_Solver():
             self.solver.Add(product_exists*dmax >= product_quantity)
 
         ### Time restriction
+            #self.solver.Sum([self.variables[product][0] = variable  of products to be used
+            #self.products[product][1] = amount of hours per unit of product
+            #self.variables[product][1] = variable if product is to be produced
         self.solver.Add(self.solver.Sum([self.variables[product][0]*self.products[product][1] for product in range(self.number_of_products)]) + \
             self.solver.Sum([self.variables[product][1] for product in range(self.number_of_products)])*self.time_change <= self.total_hours)
 
         ### Number of materials restriction
         for material_num in range(self.number_of_materials):
+                #self.products[product][0][material_num] = number of material necessary for each product
+                #self.variables[product][0] = variable  of products to be used
+                #self.variables[self.number_of_products + material_num] = number of lots variable
+                #self.materials[material_num][0] = number of materials per lot
             self.solver.Add(self.solver.Sum([self.products[product][0][material_num]*self.variables[product][0] for product in range(self.number_of_products)])\
                 <= self.variables[self.number_of_products + material_num]*self.materials[material_num][0])
 
     def objective(self):
+            #self.variables[product][0] = variable  of products to be used
+            #self.products[product][4] = price per unit of products
+            #self.variables[self.number_of_products + material] =  number of lots variable
+            #self.materials[material][1] = cost per lot of material
         self.solver.Maximize(self.solver.Sum([self.variables[product][0]*self.products[product][4] for product in range(self.number_of_products)]) \
             - self.cost_for_time - self.solver.Sum([self.variables[self.number_of_products + material]*self.materials[material][1] for material in range(self.number_of_materials)]))
 
     def print_result(self):
         status = self.solver.Solve()
-        print(status)
         if status == pywraplp.Solver.OPTIMAL:
             print('Solution:')
-            print('Objective value =', self.solver.Objective().Value())
-
+            print('Solution (profit) =', round(self.solver.Objective().Value()), '\n________________________')
+            self.time_used = 0
+            self.products_used_time = 0
             for variable in range(self.number_of_products):
-                print(self.variables[variable][0], self.variables[variable][0].solution_value())
-                print(self.variables[variable][1], self.variables[variable][1].solution_value())
+                print(f'Product {variable + 1}:')
+                print(self.variables[variable][0], '| Amount produced:', round(self.variables[variable][0].solution_value()), '| Total profit:', \
+                    self.variables[variable][0].solution_value()*self.products[variable][4])
+                print(self.variables[variable][1], round(self.variables[variable][1].solution_value()))
+                self.products_used_time += self.variables[variable][1].solution_value()
+                self.time_used += self.variables[variable][0].solution_value()*self.products[variable][1]
+                print('_'*50)
+
+            self.products_used_time *= self.time_change
 
             for variable in range(self.number_of_products, len(self.variables)):
-                print(self.variables[variable], self.variables[variable].solution_value())
+                print(f'Raw material (lots):')
+                print(self.variables[variable], round(self.variables[variable].solution_value()), '\n')
+            
+            print('Time used in production:', round(self.time_used), '| Time used in product change:', round(self.products_used_time))
 
 ilpSolver = ILP_Solver()
-data = ilpSolver.read_data('inputs/input.txt')
+data = ilpSolver.read_data('inputs/input3.txt')
 print(data)
 ilpSolver.get_variables()
 ilpSolver.restriction_creations()
 ilpSolver.objective()
+print('_'*150)
+print('_'*150)
 ilpSolver.print_result()
